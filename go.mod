@@ -3,6 +3,7 @@ module github.com/vdpeijl/clk
 go 1.25.0
 
 require (
+	github.com/BurntSushi/toml v1.4.0
 	github.com/spf13/cobra v1.10.2
 	modernc.org/sqlite v1.52.0
 )
