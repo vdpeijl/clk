@@ -157,6 +157,80 @@ func TestRegisterAndListProjects(t *testing.T) {
 	}
 }
 
+func TestPushLinksUpsertQueryDelete(t *testing.T) {
+	s := openTemp(t)
+
+	at := time.Date(2026, 6, 13, 9, 0, 0, 0, time.UTC)
+	link := PushLink{SessionKey: "clk|1", ClockifyEntryID: "e1", ContentHash: "h1", PushedAt: at}
+	if err := s.UpsertPushLink(link); err != nil {
+		t.Fatalf("UpsertPushLink: %v", err)
+	}
+
+	got, err := s.PushLinks()
+	if err != nil {
+		t.Fatalf("PushLinks: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d links, want 1", len(got))
+	}
+	g := got[0]
+	if g.SessionKey != "clk|1" || g.ClockifyEntryID != "e1" || g.ContentHash != "h1" {
+		t.Errorf("round-trip mismatch: %+v", g)
+	}
+	if !g.PushedAt.Equal(at) {
+		t.Errorf("pushed_at = %v, want %v", g.PushedAt, at)
+	}
+
+	// Re-pushing the same key updates entry id and hash rather than duplicating.
+	later := at.Add(time.Hour)
+	if err := s.UpsertPushLink(PushLink{SessionKey: "clk|1", ClockifyEntryID: "e2", ContentHash: "h2", PushedAt: later}); err != nil {
+		t.Fatalf("UpsertPushLink (update): %v", err)
+	}
+	got, err = s.PushLinks()
+	if err != nil {
+		t.Fatalf("PushLinks: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("after re-upsert got %d links, want 1", len(got))
+	}
+	if got[0].ClockifyEntryID != "e2" || got[0].ContentHash != "h2" {
+		t.Errorf("update not applied: %+v", got[0])
+	}
+
+	// Deleting forgets the link so a later push treats the session as new.
+	if err := s.DeletePushLink("clk|1"); err != nil {
+		t.Fatalf("DeletePushLink: %v", err)
+	}
+	got, err = s.PushLinks()
+	if err != nil {
+		t.Fatalf("PushLinks: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("after delete got %d links, want 0", len(got))
+	}
+}
+
+func TestPushLinksOrderedByKey(t *testing.T) {
+	s := openTemp(t)
+
+	at := time.Date(2026, 6, 13, 9, 0, 0, 0, time.UTC)
+	for _, key := range []string{"clk|3", "clk|1", "clk|2"} {
+		if err := s.UpsertPushLink(PushLink{SessionKey: key, ClockifyEntryID: "e", ContentHash: "h", PushedAt: at}); err != nil {
+			t.Fatalf("UpsertPushLink: %v", err)
+		}
+	}
+	got, err := s.PushLinks()
+	if err != nil {
+		t.Fatalf("PushLinks: %v", err)
+	}
+	want := []string{"clk|1", "clk|2", "clk|3"}
+	for i, w := range want {
+		if got[i].SessionKey != w {
+			t.Errorf("link[%d] = %q, want %q", i, got[i].SessionKey, w)
+		}
+	}
+}
+
 func TestSessionsBetweenRangeFiltering(t *testing.T) {
 	s := openTemp(t)
 

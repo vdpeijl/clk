@@ -31,6 +31,9 @@ type Session struct {
 	Description  string
 	Source       string
 	EventCount   int
+	// Files lists the distinct file paths touched during the session, in
+	// first-seen order. It feeds the {files} description placeholder.
+	Files []string
 }
 
 // Duration returns the wall-clock length of the session.
@@ -129,7 +132,23 @@ func buildSession(run []Event) Session {
 		Description:  description,
 		Source:       primarySource(run),
 		EventCount:   len(run),
+		Files:        distinctFiles(run),
 	}
+}
+
+// distinctFiles returns the file paths touched in run, de-duplicated and in
+// first-seen order. Empty paths (e.g. heartbeats) are skipped.
+func distinctFiles(run []Event) []string {
+	seen := make(map[string]bool)
+	var files []string
+	for _, e := range run {
+		if e.FilePath == "" || seen[e.FilePath] {
+			continue
+		}
+		seen[e.FilePath] = true
+		files = append(files, e.FilePath)
+	}
+	return files
 }
 
 // latestNonEmpty returns the last non-empty value produced by sel over run.
