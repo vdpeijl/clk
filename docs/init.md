@@ -14,8 +14,8 @@ clk init
 
 The command, keyed off the repository root:
 
-1. **Detects the dev tools in use** — Claude Code, Cursor, Copilot, and git —
-   and installs each one's capture hook.
+1. **Detects the dev tools in use** — Claude Code, Cursor, Copilot, Codex, and
+   git — and installs each one's capture hook.
 2. **Registers the repository** so the background daemon watches it for file
    activity.
 3. **Scaffolds a committed `.clk.toml`** carrying the project mapping and
@@ -31,6 +31,7 @@ and an existing `.clk.toml` is never overwritten.
 | `.claude/settings.json` | Claude Code PostToolUse hook (if Claude Code is detected) |
 | `.cursor/hooks.json` | Cursor `afterFileEdit` / `beforeShellExecution` hooks |
 | `.copilot/hooks.json` | Copilot `postToolUse` hook |
+| `.codex/hooks.json` | OpenAI Codex CLI `postToolUse` hook |
 | `.git/hooks/post-commit` | git commit capture (existing scripts are preserved) |
 | `.clk.toml` | Committed per-repo Clockify mapping and description template |
 

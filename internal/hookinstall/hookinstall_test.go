@@ -16,14 +16,16 @@ func TestDetect(t *testing.T) {
 		{name: "nothing detected", in: Detection{}, want: nil},
 		{
 			name: "all sources",
-			in:   Detection{ClaudeBin: true, CursorDir: true, CopilotBin: true, GitRepo: true},
-			want: []Tool{ToolClaudeCode, ToolCursor, ToolCopilot, ToolGit},
+			in:   Detection{ClaudeBin: true, CursorDir: true, CopilotBin: true, CodexDir: true, GitRepo: true},
+			want: []Tool{ToolClaudeCode, ToolCursor, ToolCopilot, ToolCodex, ToolGit},
 		},
 		{
 			name: "dir or bin each suffice",
 			in:   Detection{ClaudeDir: true, CopilotDir: true},
 			want: []Tool{ToolClaudeCode, ToolCopilot},
 		},
+		{name: "codex via dir", in: Detection{CodexDir: true}, want: []Tool{ToolCodex}},
+		{name: "codex via bin", in: Detection{CodexBin: true}, want: []Tool{ToolCodex}},
 		{name: "git only", in: Detection{GitRepo: true}, want: []Tool{ToolGit}},
 	}
 	for _, tt := range tests {

@@ -22,7 +22,8 @@ as time entries — without changing what you already do.
 
 1. **Capture.** A background daemon watches your repositories and ingests hooks
    from the editors and tools you already use (Claude Code, Cursor, Copilot,
-   git). Raw activity events land in a local database at `~/.clk/state.db`.
+   Codex, git). Raw activity events land in a local database at
+   `~/.clk/state.db`.
 2. **Reconstruct.** Events are stitched into work *sessions* with a start, end,
    project, branch, and issue id.
 3. **Review.** You correct the reconstructed sessions in an interactive TUI —

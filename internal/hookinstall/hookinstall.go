@@ -19,6 +19,7 @@ const (
 	ToolClaudeCode Tool = "claude_code"
 	ToolCursor     Tool = "cursor"
 	ToolCopilot    Tool = "copilot"
+	ToolCodex      Tool = "codex"
 	ToolGit        Tool = "git"
 )
 
@@ -29,6 +30,7 @@ const (
 	ClaudeCommand  = "clk hook claude-code"
 	CursorCommand  = "clk hook cursor"
 	CopilotCommand = "clk hook copilot"
+	CodexCommand   = "clk hook codex"
 	GitCommand     = "clk hook git"
 )
 
@@ -41,6 +43,8 @@ type Detection struct {
 	CursorBin  bool
 	CopilotDir bool
 	CopilotBin bool
+	CodexDir   bool
+	CodexBin   bool
 	GitRepo    bool
 }
 
@@ -57,6 +61,9 @@ func Detect(d Detection) []Tool {
 	}
 	if d.CopilotDir || d.CopilotBin {
 		tools = append(tools, ToolCopilot)
+	}
+	if d.CodexDir || d.CodexBin {
+		tools = append(tools, ToolCodex)
 	}
 	if d.GitRepo {
 		tools = append(tools, ToolGit)

@@ -55,6 +55,18 @@ stores the resulting event in ~/.clk/state.db.`,
 	},
 }
 
+var hookCodexCmd = &cobra.Command{
+	Use:   "codex",
+	Short: "Ingest an OpenAI Codex CLI hook payload from stdin",
+	Long: `Reads an OpenAI Codex CLI hook JSON payload on stdin, attaches the
+current git branch and PROJ-123-style issue id detected from the working
+directory, and stores the resulting event in ~/.clk/state.db.`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		return ingestStdinHook(cmd, hookparse.SourceCodex)
+	},
+}
+
 var hookGitCmd = &cobra.Command{
 	Use:   "git",
 	Short: "Capture the latest commit as an event (run from a git post-commit hook)",
@@ -124,6 +136,6 @@ func deliverEvent(cmd *cobra.Command, event sessions.Event, cwd string) error {
 }
 
 func init() {
-	hookCmd.AddCommand(hookClaudeCodeCmd, hookCursorCmd, hookCopilotCmd, hookGitCmd)
+	hookCmd.AddCommand(hookClaudeCodeCmd, hookCursorCmd, hookCopilotCmd, hookCodexCmd, hookGitCmd)
 	rootCmd.AddCommand(hookCmd)
 }

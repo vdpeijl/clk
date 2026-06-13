@@ -124,8 +124,39 @@ func TestParseCopilotMissingTool(t *testing.T) {
 	}
 }
 
+func TestParseCodex(t *testing.T) {
+	raw := []byte(`{
+		"hook_event_name": "postToolUse",
+		"tool": "apply_patch",
+		"cwd": "/home/dev/clk",
+		"arguments": {"path": "cmd/hook.go"}
+	}`)
+	e, err := Parse(raw, SourceCodex)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if e.Source != "codex" {
+		t.Errorf("source = %q, want codex", e.Source)
+	}
+	if e.Type != "tool_use" {
+		t.Errorf("type = %q, want tool_use", e.Type)
+	}
+	if e.FilePath != "cmd/hook.go" {
+		t.Errorf("file path = %q", e.FilePath)
+	}
+	if e.Description != "apply_patch cmd/hook.go" {
+		t.Errorf("description = %q", e.Description)
+	}
+}
+
+func TestParseCodexMissingTool(t *testing.T) {
+	if _, err := Parse([]byte(`{"hook_event_name":"postToolUse"}`), SourceCodex); err == nil {
+		t.Fatal("expected error for missing tool")
+	}
+}
+
 func TestParseInvalidJSON(t *testing.T) {
-	for _, src := range []Source{SourceClaudeCode, SourceCursor, SourceCopilot} {
+	for _, src := range []Source{SourceClaudeCode, SourceCursor, SourceCopilot, SourceCodex} {
 		if _, err := Parse([]byte("not json"), src); err == nil {
 			t.Errorf("expected error for invalid JSON from %s", src)
 		}
@@ -176,6 +207,7 @@ func TestCWD(t *testing.T) {
 		{name: "cursor first workspace root", raw: `{"workspace_roots":["/a","/b"]}`, source: SourceCursor, want: "/a"},
 		{name: "cursor no roots", raw: `{"hook_event_name":"stop"}`, source: SourceCursor, want: ""},
 		{name: "copilot cwd", raw: `{"tool":"x","cwd":"/home/dev/clk"}`, source: SourceCopilot, want: "/home/dev/clk"},
+		{name: "codex cwd", raw: `{"tool":"x","cwd":"/home/dev/clk"}`, source: SourceCodex, want: "/home/dev/clk"},
 		{name: "invalid json", raw: "nope", source: SourceClaudeCode, want: ""},
 		{name: "git has no cwd", raw: `{}`, source: SourceGit, want: ""},
 	}
