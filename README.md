@@ -50,11 +50,25 @@ clk push              # push to Clockify
 ## Development
 
 ```sh
-go build ./cmd/clk/   # build
-go test ./...          # run tests
+make build   # build ./cmd/clk
+make test    # run tests
+make lint    # golangci-lint (same invocation as CI)
+make fmt     # gofmt all tracked Go files
+make check   # fmt + lint + test
 ```
 
 Requires Go 1.21+. No CGO — the binary is fully static.
+
+First-time setup:
+
+```sh
+make tools   # install golangci-lint (the version CI uses)
+make hooks   # install the pre-commit hook (gofmt + lint on commit)
+```
+
+`make hooks` symlinks [`.githooks/pre-commit`](.githooks/pre-commit) into
+`.git/hooks`, so each commit is auto-formatted and linted before it lands —
+catching the same issues CI would, locally.
 
 ## Releasing
 

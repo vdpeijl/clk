@@ -103,12 +103,12 @@ func TestRunUpgrades(t *testing.T) {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/download/clk", func(w http.ResponseWriter, _ *http.Request) {
-		w.Write(archive)
+		_, _ = w.Write(archive)
 	})
 	var srv *httptest.Server
 	mux.HandleFunc("/repos/vdpeijl/clk/releases/latest", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"tag_name":"v9.9.9","assets":[{"name":"` + asset + `","browser_download_url":"` + srv.URL + `/download/clk"}]}`))
+		_, _ = w.Write([]byte(`{"tag_name":"v9.9.9","assets":[{"name":"` + asset + `","browser_download_url":"` + srv.URL + `/download/clk"}]}`))
 	})
 	srv = httptest.NewServer(mux)
 	defer srv.Close()
@@ -139,7 +139,7 @@ func TestRunUpgrades(t *testing.T) {
 func TestRunNoOpWhenCurrent(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/repos/vdpeijl/clk/releases/latest", func(w http.ResponseWriter, _ *http.Request) {
-		w.Write([]byte(`{"tag_name":"v2.0.0","assets":[]}`))
+		_, _ = w.Write([]byte(`{"tag_name":"v2.0.0","assets":[]}`))
 	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()

@@ -1,0 +1,30 @@
+#!/bin/sh
+# clk pre-commit hook: gofmt staged Go files, then run the same linter as CI.
+# Install with `make hooks` (symlinks this into .git/hooks/pre-commit, leaving
+# the clk post-commit capture hook intact).
+set -e
+
+# Format any staged Go files in place and re-stage the result.
+gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)
+if [ -n "$gofiles" ]; then
+	unformatted=$(gofmt -l $gofiles)
+	if [ -n "$unformatted" ]; then
+		echo "pre-commit: gofmt -w $unformatted"
+		gofmt -w $unformatted
+		git add $unformatted
+	fi
+fi
+
+# Lint the whole module — mirrors `golangci-lint run ./...` in CI. Fall back to
+# $GOPATH/bin since git hooks often run without it on PATH.
+linter=$(command -v golangci-lint 2>/dev/null || true)
+if [ -z "$linter" ]; then
+	gopath_bin="$(go env GOPATH 2>/dev/null)/bin"
+	[ -x "$gopath_bin/golangci-lint" ] && linter="$gopath_bin/golangci-lint"
+fi
+if [ -n "$linter" ]; then
+	"$linter" run ./...
+else
+	echo "pre-commit: golangci-lint not installed — run 'make tools' to match CI." >&2
+	echo "pre-commit: skipping lint." >&2
+fi
