@@ -31,7 +31,8 @@ clk push              # push to Clockify
 | `clk version` | Print the version |
 | `clk auth login` | Store your Clockify API key |
 | `clk init` | Install hooks and register the current project |
-| `clk up / down / status` | Control the background daemon |
+| `clk up / down / status` | Control and inspect the background daemon |
+| `clk logs [-f]` | Show (and optionally follow) the daemon log |
 | `clk list [today\|yesterday\|week\|month]` | List captured sessions |
 | `clk review` | Interactive TUI to review sessions before pushing |
 | `clk push [--merge]` | Push sessions to Clockify |

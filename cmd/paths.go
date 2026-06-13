@@ -26,9 +26,30 @@ func clkDir() (string, error) {
 
 // dbPath returns the path to the SQLite state database (~/.clk/state.db).
 func dbPath() (string, error) {
+	return clkFile("state.db")
+}
+
+// socketPath returns the path to the daemon's Unix socket (~/.clk/daemon.sock).
+func socketPath() (string, error) {
+	return clkFile("daemon.sock")
+}
+
+// pidPath returns the path to the daemon's PID file (~/.clk/daemon.pid).
+func pidPath() (string, error) {
+	return clkFile("daemon.pid")
+}
+
+// logPath returns the path to the daemon's log file (~/.clk/daemon.log).
+func logPath() (string, error) {
+	return clkFile("daemon.log")
+}
+
+// clkFile joins name onto the per-user clk state directory, creating the
+// directory if necessary.
+func clkFile(name string) (string, error) {
 	dir, err := clkDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "state.db"), nil
+	return filepath.Join(dir, name), nil
 }
