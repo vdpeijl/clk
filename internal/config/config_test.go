@@ -189,6 +189,52 @@ func TestSaveUserTightensExistingMode(t *testing.T) {
 	}
 }
 
+func TestScaffoldProjectCreatesAndLoadsBack(t *testing.T) {
+	dir := t.TempDir()
+	pc := ProjectConfig{ClockifyProject: "clk", Template: DefaultTemplate}
+
+	created, err := ScaffoldProject(dir, pc)
+	if err != nil {
+		t.Fatalf("ScaffoldProject: %v", err)
+	}
+	if !created {
+		t.Fatal("expected created=true for a fresh directory")
+	}
+
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.ClockifyProject != "clk" {
+		t.Errorf("project = %q, want clk", cfg.ClockifyProject)
+	}
+	if cfg.Template != DefaultTemplate {
+		t.Errorf("template = %q, want %q", cfg.Template, DefaultTemplate)
+	}
+}
+
+func TestScaffoldProjectDoesNotClobber(t *testing.T) {
+	t.Setenv("CLK_HOME", t.TempDir())
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, ".clk.toml"), "[clockify]\nproject = \"team\"\n")
+
+	created, err := ScaffoldProject(dir, ProjectConfig{ClockifyProject: "overwrite"})
+	if err != nil {
+		t.Fatalf("ScaffoldProject: %v", err)
+	}
+	if created {
+		t.Fatal("expected created=false when .clk.toml already exists")
+	}
+
+	cfg, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.ClockifyProject != "team" {
+		t.Errorf("existing config clobbered: project = %q, want team", cfg.ClockifyProject)
+	}
+}
+
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {

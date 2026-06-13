@@ -1,6 +1,9 @@
 package gitctx
 
-import "testing"
+import (
+	"os/exec"
+	"testing"
+)
 
 func TestIssueIDFromBranch(t *testing.T) {
 	tests := []struct {
@@ -38,5 +41,35 @@ func TestDetectNonRepoUsesDirName(t *testing.T) {
 	}
 	if got.ProjectToken == "" {
 		t.Errorf("project token should fall back to the directory base name")
+	}
+}
+
+func TestLastCommit(t *testing.T) {
+	dir := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run("init")
+	run("config", "user.email", "test@example.com")
+	run("config", "user.name", "Test")
+	run("commit", "--allow-empty", "-m", "feat: capture commits")
+
+	got := LastCommit(dir)
+	if got.Subject != "feat: capture commits" {
+		t.Errorf("subject = %q, want %q", got.Subject, "feat: capture commits")
+	}
+	if len(got.SHA) < 7 {
+		t.Errorf("sha = %q, want a full commit hash", got.SHA)
+	}
+}
+
+func TestLastCommitOutsideRepo(t *testing.T) {
+	got := LastCommit(t.TempDir())
+	if got != (Commit{}) {
+		t.Errorf("LastCommit outside a repo = %+v, want zero", got)
 	}
 }
