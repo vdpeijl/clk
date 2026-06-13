@@ -135,6 +135,13 @@ func ScaffoldProject(projectPath string, pc ProjectConfig) (created bool, err er
 	return true, nil
 }
 
+// mappingEntry mirrors a single [mappings.<token>] table: the Clockify project
+// (and optional task) a local project token resolves to.
+type mappingEntry struct {
+	Project string `toml:"project"`
+	Task    string `toml:"task"`
+}
+
 // projectFile mirrors the on-disk layout of .clk.toml.
 type projectFile struct {
 	Clockify struct {
@@ -143,6 +150,9 @@ type projectFile struct {
 		Billable bool   `toml:"billable"`
 		Template string `toml:"template"`
 	} `toml:"clockify"`
+	// Mappings is the team-shared, token-keyed project mapping persisted by the
+	// prompt-once pick and `clk link`.
+	Mappings map[string]mappingEntry `toml:"mappings,omitempty"`
 }
 
 // userFile mirrors the on-disk layout of ~/.clk/config.toml.
@@ -156,6 +166,9 @@ type userFile struct {
 	Push struct {
 		Round string `toml:"round"`
 	} `toml:"push"`
+	// Mappings holds personal, token-keyed overrides that win over the committed
+	// .clk.toml mapping locally.
+	Mappings map[string]mappingEntry `toml:"mappings,omitempty"`
 }
 
 // Load reads the committed .clk.toml from projectPath, the personal
@@ -181,10 +194,39 @@ func EnvFromOS() Env {
 	return Env{APIKey: os.Getenv(envAPIKey)}
 }
 
-// loadProject reads a .clk.toml file. A missing file yields a zero ProjectConfig.
-func loadProject(path string) (ProjectConfig, error) {
+// loadProjectFile reads the raw .clk.toml at path. A missing file yields a zero
+// projectFile so callers can round-trip (read, modify, write).
+func loadProjectFile(path string) (projectFile, error) {
 	var f projectFile
 	if err := decodeTOML(path, &f); err != nil {
+		return projectFile{}, err
+	}
+	return f, nil
+}
+
+// saveProjectFile writes the .clk.toml at path at mode 0644. Unlike
+// ScaffoldProject it overwrites an existing file, so it is only used by the
+// mapping writers (prompt-once pick and `clk link`) which deliberately edit the
+// committed config.
+func saveProjectFile(path string, f projectFile) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("create %s: %w", filepath.Dir(path), err)
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	if err != nil {
+		return fmt.Errorf("open %s: %w", path, err)
+	}
+	defer file.Close()
+	if err := toml.NewEncoder(file).Encode(f); err != nil {
+		return fmt.Errorf("encode %s: %w", path, err)
+	}
+	return nil
+}
+
+// loadProject reads a .clk.toml file. A missing file yields a zero ProjectConfig.
+func loadProject(path string) (ProjectConfig, error) {
+	f, err := loadProjectFile(path)
+	if err != nil {
 		return ProjectConfig{}, err
 	}
 	return ProjectConfig{
@@ -195,14 +237,25 @@ func loadProject(path string) (ProjectConfig, error) {
 	}, nil
 }
 
-// LoadUser reads ~/.clk/config.toml. A missing file yields a zero UserConfig.
-func LoadUser() (UserConfig, error) {
+// loadUserFile reads the raw ~/.clk/config.toml. A missing file yields a zero
+// userFile so callers can round-trip (read, modify, write) without special
+// casing first use.
+func loadUserFile() (userFile, error) {
 	path, err := UserConfigPath()
 	if err != nil {
-		return UserConfig{}, err
+		return userFile{}, err
 	}
 	var f userFile
 	if err := decodeTOML(path, &f); err != nil {
+		return userFile{}, err
+	}
+	return f, nil
+}
+
+// LoadUser reads ~/.clk/config.toml. A missing file yields a zero UserConfig.
+func LoadUser() (UserConfig, error) {
+	f, err := loadUserFile()
+	if err != nil {
 		return UserConfig{}, err
 	}
 	return UserConfig{
@@ -218,6 +271,24 @@ func LoadUser() (UserConfig, error) {
 // creating the clk home directory (0700) if necessary. Because the file holds
 // the Clockify API key, the restrictive permissions are enforced on every write.
 func SaveUser(uc UserConfig) error {
+	// Round-trip the existing file so personal mappings (and any future
+	// sections) survive a credentials-only update such as `clk auth login`.
+	f, err := loadUserFile()
+	if err != nil {
+		return err
+	}
+	f.Clockify.APIKey = uc.APIKey
+	f.Clockify.Workspace = uc.WorkspaceID
+	f.Clockify.Project = uc.ClockifyProject
+	f.Clockify.Task = uc.ClockifyTask
+	f.Push.Round = uc.PushRound
+	return writeUserFile(f)
+}
+
+// writeUserFile persists the user config at mode 0600, creating the clk home
+// directory (0700) if necessary. Because the file holds the Clockify API key,
+// the restrictive permissions are enforced on every write.
+func writeUserFile(f userFile) error {
 	path, err := UserConfigPath()
 	if err != nil {
 		return err
@@ -225,13 +296,6 @@ func SaveUser(uc UserConfig) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create config dir: %w", err)
 	}
-
-	var f userFile
-	f.Clockify.APIKey = uc.APIKey
-	f.Clockify.Workspace = uc.WorkspaceID
-	f.Clockify.Project = uc.ClockifyProject
-	f.Clockify.Task = uc.ClockifyTask
-	f.Push.Round = uc.PushRound
 
 	// Open with 0600 up front so the secret is never briefly world-readable.
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
