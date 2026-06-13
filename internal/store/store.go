@@ -77,6 +77,13 @@ CREATE TABLE IF NOT EXISTS projects (
 	token         TEXT NOT NULL,
 	registered_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS push_links (
+	session_key  TEXT PRIMARY KEY,
+	entry_id     TEXT NOT NULL,
+	content_hash TEXT NOT NULL,
+	pushed_at    INTEGER NOT NULL
+);
 `
 	_, err := s.db.Exec(schema)
 	return err
@@ -232,6 +239,69 @@ func (s *Store) ReplaceSessionsBetween(start, end time.Time, ss []sessions.Sessi
 	}
 
 	return tx.Commit()
+}
+
+// PushLink records that a session (identified by its stable key) was pushed to
+// Clockify as a particular entry, plus a content hash of the pushed payload.
+// The hash drives the create/update/skip decision on the next push; deletion is
+// only ever explicit via `clk unpush`.
+type PushLink struct {
+	SessionKey      string
+	ClockifyEntryID string
+	ContentHash     string
+	PushedAt        time.Time
+}
+
+// UpsertPushLink records (or refreshes) the link for a session key, keyed so a
+// re-push updates the existing row rather than duplicating it.
+func (s *Store) UpsertPushLink(l PushLink) error {
+	_, err := s.db.Exec(
+		`INSERT INTO push_links (session_key, entry_id, content_hash, pushed_at)
+		 VALUES (?, ?, ?, ?)
+		 ON CONFLICT(session_key) DO UPDATE SET
+			entry_id = excluded.entry_id,
+			content_hash = excluded.content_hash,
+			pushed_at = excluded.pushed_at`,
+		l.SessionKey, l.ClockifyEntryID, l.ContentHash, l.PushedAt.Unix(),
+	)
+	return err
+}
+
+// PushLinks returns every recorded push link, ordered by session key for
+// stability. It is the prior-push state the pushplanner diffs against.
+func (s *Store) PushLinks() ([]PushLink, error) {
+	rows, err := s.db.Query(
+		`SELECT session_key, entry_id, content_hash, pushed_at
+		 FROM push_links ORDER BY session_key ASC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []PushLink
+	for rows.Next() {
+		var (
+			l        PushLink
+			pushedAt int64
+		)
+		if err := rows.Scan(&l.SessionKey, &l.ClockifyEntryID, &l.ContentHash, &pushedAt); err != nil {
+			return nil, err
+		}
+		l.PushedAt = time.Unix(pushedAt, 0)
+		result = append(result, l)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// DeletePushLink removes the link for a session key. `clk unpush` calls it after
+// deleting the entry from Clockify so the next push treats the session as new.
+func (s *Store) DeletePushLink(sessionKey string) error {
+	_, err := s.db.Exec(`DELETE FROM push_links WHERE session_key = ?`, sessionKey)
+	return err
 }
 
 // SessionsBetween returns the materialized sessions whose start falls in
