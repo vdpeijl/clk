@@ -19,7 +19,7 @@ import (
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Install tool hooks and register the current project",
-	Long: `Detects the dev tools in use (Claude Code, Cursor, Copilot, git),
+	Long: `Detects the dev tools in use (Claude Code, Cursor, Copilot, Codex, git),
 installs their capture hooks, registers the repository so the daemon watches it
 for file activity, and scaffolds a committed .clk.toml carrying the project
 mapping and description template so teammates inherit the conventions on clone.`,
@@ -101,6 +101,8 @@ func detection(root string) hookinstall.Detection {
 		CursorBin:  binOnPath("cursor"),
 		CopilotDir: dirExists(filepath.Join(root, ".copilot")),
 		CopilotBin: binOnPath("copilot"),
+		CodexDir:   dirExists(filepath.Join(root, ".codex")),
+		CodexBin:   binOnPath("codex"),
 		GitRepo:    dirExists(filepath.Join(root, ".git")),
 	}
 }
@@ -120,6 +122,10 @@ func installHook(root string, tool hookinstall.Tool) (bool, error) {
 	case hookinstall.ToolCopilot:
 		return installJSONHook(filepath.Join(root, ".copilot", "hooks.json"), func(existing []byte) ([]byte, bool, error) {
 			return hookinstall.MergeEventHooks(existing, []string{"postToolUse"}, hookinstall.CopilotCommand)
+		})
+	case hookinstall.ToolCodex:
+		return installJSONHook(filepath.Join(root, ".codex", "hooks.json"), func(existing []byte) ([]byte, bool, error) {
+			return hookinstall.MergeEventHooks(existing, []string{"postToolUse"}, hookinstall.CodexCommand)
 		})
 	case hookinstall.ToolGit:
 		return installGitHook(root)

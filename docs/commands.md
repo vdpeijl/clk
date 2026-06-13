@@ -28,6 +28,9 @@ help.
 | [`clk log`](#clk-log) | Create a manual Clockify time entry |
 | [`clk hook`](#clk-hook) | Ingest activity from an editor or tool hook (internal) |
 
+Supported capture sources: Claude Code, Cursor, Copilot, OpenAI Codex CLI, and
+git.
+
 A `clk completion` command is also available to generate shell autocompletion
 scripts (`clk completion --help`).
 
@@ -64,10 +67,10 @@ See the [authentication guide](auth).
 clk init
 ```
 
-Detects the dev tools in use (Claude Code, Cursor, Copilot, git), installs their
-capture hooks, registers the repository so the daemon watches it for file
-activity, and scaffolds a committed `.clk.toml` carrying the project mapping and
-description template so teammates inherit the conventions on clone.
+Detects the dev tools in use (Claude Code, Cursor, Copilot, Codex, git),
+installs their capture hooks, registers the repository so the daemon watches it
+for file activity, and scaffolds a committed `.clk.toml` carrying the project
+mapping and description template so teammates inherit the conventions on clone.
 
 See the [repo setup guide](init).
 
@@ -208,8 +211,12 @@ repo to be mapped (see [`clk link`](#clk-link)).
 
 ```sh
 clk hook claude-code      # ingest a Claude Code PostToolUse payload from stdin
+clk hook cursor           # ingest a Cursor agent hook payload from stdin
+clk hook copilot          # ingest a Copilot CLI hook payload from stdin
+clk hook codex            # ingest an OpenAI Codex CLI hook payload from stdin
+clk hook git              # capture the latest commit (run from a post-commit hook)
 ```
 
-Internal: invoked by the capture hooks `clk init` installs, not run by hand. It
-reads a tool's payload from stdin, attaches the current git branch and
-`PROJ-123`-style issue id, and stores the resulting event in `~/.clk/state.db`.
+Internal: invoked by the capture hooks `clk init` installs, not run by hand. The
+stdin-based variants read a tool's payload, attach the current git branch and
+`PROJ-123`-style issue id, and store the resulting event in `~/.clk/state.db`.

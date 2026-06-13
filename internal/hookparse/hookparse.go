@@ -19,6 +19,7 @@ const (
 	SourceClaudeCode Source = "claude_code"
 	SourceCursor     Source = "cursor"
 	SourceCopilot    Source = "copilot"
+	SourceCodex      Source = "codex"
 	SourceGit        Source = "git"
 	SourceFileWatch  Source = "filewatch"
 )
@@ -34,6 +35,8 @@ func Parse(raw json.RawMessage, source Source) (sessions.Event, error) {
 		return parseCursor(raw)
 	case SourceCopilot:
 		return parseCopilot(raw)
+	case SourceCodex:
+		return parseCodex(raw)
 	default:
 		return sessions.Event{}, fmt.Errorf("unknown source: %s", source)
 	}
@@ -61,6 +64,12 @@ func CWD(raw json.RawMessage, source Source) string {
 		return ""
 	case SourceCopilot:
 		var p copilotPayload
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return ""
+		}
+		return p.CWD
+	case SourceCodex:
+		var p codexPayload
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return ""
 		}
@@ -93,6 +102,17 @@ type cursorPayload struct {
 // the same tool/arguments shape as Claude Code, so the path-extraction logic is
 // shared.
 type copilotPayload struct {
+	HookEventName string          `json:"hook_event_name"`
+	Tool          string          `json:"tool"`
+	CWD           string          `json:"cwd"`
+	Arguments     json.RawMessage `json:"arguments"`
+}
+
+// codexPayload mirrors the fields of an OpenAI Codex CLI hook payload. Like
+// Copilot it reports the invoked tool, the working directory, and an arguments
+// object carrying any path the tool touched, so the path-extraction logic is
+// shared.
+type codexPayload struct {
 	HookEventName string          `json:"hook_event_name"`
 	Tool          string          `json:"tool"`
 	CWD           string          `json:"cwd"`
@@ -166,6 +186,25 @@ func parseCopilot(raw json.RawMessage) (sessions.Event, error) {
 	return sessions.Event{
 		Type:        "tool_use",
 		Source:      string(SourceCopilot),
+		Description: describe(p.Tool, filePath),
+		FilePath:    filePath,
+	}, nil
+}
+
+func parseCodex(raw json.RawMessage) (sessions.Event, error) {
+	var p codexPayload
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return sessions.Event{}, fmt.Errorf("parse codex payload: %w", err)
+	}
+	if p.Tool == "" {
+		return sessions.Event{}, fmt.Errorf("codex payload missing tool")
+	}
+
+	filePath := extractFilePath(p.Arguments)
+
+	return sessions.Event{
+		Type:        "tool_use",
+		Source:      string(SourceCodex),
 		Description: describe(p.Tool, filePath),
 		FilePath:    filePath,
 	}, nil
