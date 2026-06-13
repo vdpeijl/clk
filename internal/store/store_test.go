@@ -59,6 +59,88 @@ func TestInsertAndQueryEvents(t *testing.T) {
 	}
 }
 
+func TestReplaceAndQuerySessions(t *testing.T) {
+	s := openTemp(t)
+
+	day := time.Date(2026, 6, 13, 9, 0, 0, 0, time.UTC)
+	window := []sessions.Session{
+		{
+			ProjectToken: "clk",
+			Start:        day,
+			End:          day.Add(30 * time.Minute),
+			Branch:       "main",
+			IssueID:      "PROJ-1",
+			Description:  "work",
+			Source:       "claude_code",
+			EventCount:   4,
+		},
+	}
+	winStart, winEnd := day.Add(-time.Hour), day.Add(24*time.Hour)
+	if err := s.ReplaceSessionsBetween(winStart, winEnd, window); err != nil {
+		t.Fatalf("ReplaceSessionsBetween: %v", err)
+	}
+
+	got, err := s.SessionsBetween(winStart, winEnd)
+	if err != nil {
+		t.Fatalf("SessionsBetween: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d sessions, want 1", len(got))
+	}
+	g := got[0]
+	if g.ProjectToken != "clk" || g.Branch != "main" || g.IssueID != "PROJ-1" ||
+		g.Description != "work" || g.Source != "claude_code" || g.EventCount != 4 {
+		t.Errorf("round-trip mismatch: %+v", g)
+	}
+	if !g.Start.Equal(day) || !g.End.Equal(day.Add(30*time.Minute)) {
+		t.Errorf("times = %v..%v, want %v..%v", g.Start, g.End, day, day.Add(30*time.Minute))
+	}
+
+	// Replacing the window must overwrite, not append.
+	replacement := []sessions.Session{
+		{ProjectToken: "clk", Start: day, End: day.Add(time.Hour), Source: "git", EventCount: 9},
+	}
+	if err := s.ReplaceSessionsBetween(winStart, winEnd, replacement); err != nil {
+		t.Fatalf("ReplaceSessionsBetween (replace): %v", err)
+	}
+	got, err = s.SessionsBetween(winStart, winEnd)
+	if err != nil {
+		t.Fatalf("SessionsBetween: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("after replace got %d sessions, want 1", len(got))
+	}
+	if got[0].EventCount != 9 || got[0].Source != "git" {
+		t.Errorf("replacement not applied: %+v", got[0])
+	}
+}
+
+func TestSessionsBetweenRangeFiltering(t *testing.T) {
+	s := openTemp(t)
+
+	day := time.Date(2026, 6, 13, 0, 0, 0, 0, time.UTC)
+	in := []sessions.Session{
+		{ProjectToken: "clk", Start: day.Add(-2 * time.Hour), End: day.Add(-time.Hour)},
+		{ProjectToken: "clk", Start: day.Add(2 * time.Hour), End: day.Add(3 * time.Hour)},
+		{ProjectToken: "clk", Start: day.Add(48 * time.Hour), End: day.Add(49 * time.Hour)},
+	}
+	wide := day.Add(-72 * time.Hour)
+	if err := s.ReplaceSessionsBetween(wide, day.Add(72*time.Hour), in); err != nil {
+		t.Fatalf("ReplaceSessionsBetween: %v", err)
+	}
+
+	got, err := s.SessionsBetween(day, day.Add(24*time.Hour))
+	if err != nil {
+		t.Fatalf("SessionsBetween: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d sessions in window, want 1", len(got))
+	}
+	if !got[0].Start.Equal(day.Add(2 * time.Hour)) {
+		t.Errorf("wrong session selected: %+v", got[0])
+	}
+}
+
 func TestEventsBetweenRangeFiltering(t *testing.T) {
 	s := openTemp(t)
 

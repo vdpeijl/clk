@@ -22,6 +22,12 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A busy timeout lets a reader (e.g. clk list) and the daemon writer share
+	// the database without spurious "database is locked" errors.
+	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
+		db.Close()
+		return nil, err
+	}
 	s := &Store{db: db}
 	if err := s.migrate(); err != nil {
 		db.Close()
@@ -51,6 +57,20 @@ CREATE TABLE IF NOT EXISTS events (
 	topic         TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
+
+CREATE TABLE IF NOT EXISTS sessions (
+	id               INTEGER PRIMARY KEY AUTOINCREMENT,
+	project_token    TEXT NOT NULL,
+	start_ts         INTEGER NOT NULL,
+	end_ts           INTEGER NOT NULL,
+	duration_seconds INTEGER NOT NULL,
+	source           TEXT NOT NULL DEFAULT '',
+	branch           TEXT NOT NULL DEFAULT '',
+	issue_id         TEXT NOT NULL DEFAULT '',
+	description      TEXT NOT NULL DEFAULT '',
+	event_count      INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_start ON sessions(start_ts);
 `
 	_, err := s.db.Exec(schema)
 	return err
@@ -112,4 +132,90 @@ func (s *Store) EventsBetween(start, end time.Time) ([]sessions.Event, error) {
 		return nil, err
 	}
 	return events, nil
+}
+
+// ReplaceSessionsBetween atomically rewrites the materialized sessions whose
+// start falls in [start, end) with the supplied ones. The daemon calls this
+// after reconstructing events for a window, so re-materialization is
+// idempotent and adjacency merges (which extend or coalesce sessions) are
+// reflected in place rather than duplicated.
+func (s *Store) ReplaceSessionsBetween(start, end time.Time, ss []sessions.Session) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
+
+	if _, err := tx.Exec(
+		`DELETE FROM sessions WHERE start_ts >= ? AND start_ts < ?`,
+		start.Unix(), end.Unix(),
+	); err != nil {
+		return err
+	}
+
+	stmt, err := tx.Prepare(
+		`INSERT INTO sessions
+			(project_token, start_ts, end_ts, duration_seconds, source, branch, issue_id, description, event_count)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, sess := range ss {
+		if _, err := stmt.Exec(
+			sess.ProjectToken,
+			sess.Start.Unix(),
+			sess.End.Unix(),
+			int64(sess.Duration().Seconds()),
+			sess.Source,
+			sess.Branch,
+			sess.IssueID,
+			sess.Description,
+			sess.EventCount,
+		); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
+}
+
+// SessionsBetween returns the materialized sessions whose start falls in
+// [start, end), ordered chronologically.
+func (s *Store) SessionsBetween(start, end time.Time) ([]sessions.Session, error) {
+	rows, err := s.db.Query(
+		`SELECT id, project_token, start_ts, end_ts, source, branch, issue_id, description, event_count
+		 FROM sessions
+		 WHERE start_ts >= ? AND start_ts < ?
+		 ORDER BY start_ts ASC, id ASC`,
+		start.Unix(),
+		end.Unix(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []sessions.Session
+	for rows.Next() {
+		var (
+			sess           sessions.Session
+			startTS, endTS int64
+		)
+		if err := rows.Scan(
+			&sess.ID, &sess.ProjectToken, &startTS, &endTS,
+			&sess.Source, &sess.Branch, &sess.IssueID, &sess.Description, &sess.EventCount,
+		); err != nil {
+			return nil, err
+		}
+		sess.Start = time.Unix(startTS, 0)
+		sess.End = time.Unix(endTS, 0)
+		result = append(result, sess)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }

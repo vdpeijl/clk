@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/vdpeijl/clk/internal/capture"
 	"github.com/vdpeijl/clk/internal/gitctx"
 	"github.com/vdpeijl/clk/internal/hookparse"
-	"github.com/vdpeijl/clk/internal/store"
 )
 
 var hookCmd = &cobra.Command{
@@ -41,22 +41,24 @@ directory, and stores the resulting event in ~/.clk/state.db.`,
 		event.IssueID = ctx.IssueID
 		event.Timestamp = time.Now()
 
-		path, err := dbPath()
+		p, err := resolveDaemonPaths()
 		if err != nil {
 			return err
 		}
-		st, err := store.Open(path)
+		exe, args, err := daemonSpawn()
 		if err != nil {
 			return err
 		}
-		defer st.Close()
 
-		id, err := st.InsertEvent(event)
-		if err != nil {
-			return fmt.Errorf("store event: %w", err)
+		// Fire-and-forget through the daemon, auto-starting it (with no loss of
+		// this event) the first time a hook fires.
+		if err := capture.EnsureRunningAndSend(
+			exe, args, p.socket, p.pid, p.log, capture.FromSessionEvent(event),
+		); err != nil {
+			return fmt.Errorf("deliver event to daemon: %w", err)
 		}
 
-		fmt.Fprintf(cmd.OutOrStdout(), "captured %s event %d in %q\n", event.Source, id, event.ProjectToken)
+		fmt.Fprintf(cmd.OutOrStdout(), "captured %s event in %q\n", event.Source, event.ProjectToken)
 		return nil
 	},
 }
