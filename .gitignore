@@ -1,3 +1,6 @@
 /clk
 *.db
 .clk/
+
+# Personal, machine-local Claude Code settings (permission grants etc.).
+.claude/settings.local.json

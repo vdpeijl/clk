@@ -1,0 +1,75 @@
+# GoReleaser configuration for clk.
+# Builds static binaries for darwin/linux x arm64/amd64, attaches them to a
+# GitHub Release, and publishes a Homebrew formula to vdpeijl/homebrew-tap.
+# Triggered by pushing a `v*` tag (see .github/workflows/release.yml).
+# Validate locally with: goreleaser check  /  goreleaser release --snapshot --clean
+version: 2
+
+project_name: clk
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: clk
+    main: ./cmd/clk
+    binary: clk
+    env:
+      # CGO-free so the binary is fully static and cross-compiles cleanly.
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X github.com/vdpeijl/clk/cmd.Version={{ .Version }}
+
+archives:
+  - id: clk
+    # Version-free names so install.sh and `clk upgrade` can resolve assets via
+    # the predictable /releases/latest/download/<name> redirect.
+    name_template: "clk_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+brews:
+  - name: clk
+    repository:
+      owner: vdpeijl
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/vdpeijl/clk"
+    description: "Auto-capture dev activity and push it to Clockify"
+    license: "MIT"
+    install: |
+      bin.install "clk"
+    test: |
+      system "#{bin}/clk", "version"
+
+release:
+  github:
+    owner: vdpeijl
+    name: clk
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+      - "Merge branch"
