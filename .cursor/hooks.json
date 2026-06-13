@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "afterFileEdit": [
+      {
+        "command": "clk hook cursor"
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "clk hook cursor"
+      }
+    ]
+  }
+}
