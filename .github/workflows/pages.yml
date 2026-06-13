@@ -30,6 +30,10 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
+        with:
+          # Enable Pages on first run so the deploy isn't blocked by a manual
+          # Settings → Pages toggle.
+          enablement: true
 
       - name: Build with Jekyll
         uses: actions/jekyll-build-pages@v1
