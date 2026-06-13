@@ -1,0 +1,27 @@
+title: clk
+description: Auto-capture dev activity and push it to Clockify.
+remote_theme: just-the-docs/just-the-docs
+
+# GitHub Pages serves the site under the repository path.
+url: https://vdpeijl.github.io
+baseurl: /clk
+
+# just-the-docs options
+search_enabled: true
+heading_anchors: true
+color_scheme: dark
+
+aux_links:
+  "GitHub":
+    - "https://github.com/vdpeijl/clk"
+aux_links_new_tab: true
+
+# The github-pages gem bundles this plugin; it resolves remote_theme above.
+plugins:
+  - jekyll-remote-theme
+
+# Keep the source tidy.
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - vendor

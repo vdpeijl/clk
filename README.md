@@ -4,6 +4,8 @@ Auto-capture dev activity and push it to Clockify.
 
 `clk` is a single Go binary (CLI + background daemon) that captures your development activity automatically and lets you review and push it to Clockify as time entries — without changing what you already do.
 
+📖 **Full documentation:** <https://vdpeijl.github.io/clk/> — install, auth, init, review, push guides, a complete command reference, and configuration. Sources live in [`docs/`](docs/).
+
 ## Install
 
 ```sh
