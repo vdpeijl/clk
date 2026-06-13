@@ -95,6 +95,46 @@ func Merge(project ProjectConfig, user UserConfig, env Env) Config {
 	return c
 }
 
+// DefaultTemplate is the description template seeded into a freshly scaffolded
+// .clk.toml.
+const DefaultTemplate = "{issue} {branch}: {summary}"
+
+// ScaffoldProject writes a starter .clk.toml into projectPath when none exists,
+// seeding the team-shared Clockify mapping and description template so that
+// teammates inherit the conventions on clone. An existing file is left
+// untouched (created=false) so committed conventions are never clobbered.
+func ScaffoldProject(projectPath string, pc ProjectConfig) (created bool, err error) {
+	path := filepath.Join(projectPath, projectFileName)
+	switch _, statErr := os.Stat(path); {
+	case statErr == nil:
+		return false, nil
+	case !os.IsNotExist(statErr):
+		return false, fmt.Errorf("stat %s: %w", path, statErr)
+	}
+
+	var f projectFile
+	f.Clockify.Project = pc.ClockifyProject
+	f.Clockify.Task = pc.ClockifyTask
+	f.Clockify.Billable = pc.Billable
+	f.Clockify.Template = pc.Template
+
+	// O_EXCL guards against a concurrent writer creating the file between the
+	// stat above and the open here.
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		if os.IsExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("create %s: %w", path, err)
+	}
+	defer file.Close()
+
+	if err := toml.NewEncoder(file).Encode(f); err != nil {
+		return false, fmt.Errorf("encode %s: %w", path, err)
+	}
+	return true, nil
+}
+
 // projectFile mirrors the on-disk layout of .clk.toml.
 type projectFile struct {
 	Clockify struct {

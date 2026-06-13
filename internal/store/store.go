@@ -71,6 +71,12 @@ CREATE TABLE IF NOT EXISTS sessions (
 	event_count      INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_start ON sessions(start_ts);
+
+CREATE TABLE IF NOT EXISTS projects (
+	root          TEXT PRIMARY KEY,
+	token         TEXT NOT NULL,
+	registered_at INTEGER NOT NULL
+);
 `
 	_, err := s.db.Exec(schema)
 	return err
@@ -95,6 +101,52 @@ func (s *Store) InsertEvent(e sessions.Event) (int64, error) {
 		return 0, err
 	}
 	return res.LastInsertId()
+}
+
+// Project is a local repository registered with `clk init`. The daemon watches
+// each registered root for file-change heartbeats.
+type Project struct {
+	Root         string
+	Token        string
+	RegisteredAt time.Time
+}
+
+// RegisterProject records (or refreshes) a project root in the local registry,
+// keyed by its absolute root path so re-running `clk init` updates rather than
+// duplicates the entry.
+func (s *Store) RegisterProject(root, token string, at time.Time) error {
+	_, err := s.db.Exec(
+		`INSERT INTO projects (root, token, registered_at) VALUES (?, ?, ?)
+		 ON CONFLICT(root) DO UPDATE SET token = excluded.token, registered_at = excluded.registered_at`,
+		root, token, at.Unix(),
+	)
+	return err
+}
+
+// Projects returns every registered project, ordered by root for stability.
+func (s *Store) Projects() ([]Project, error) {
+	rows, err := s.db.Query(`SELECT root, token, registered_at FROM projects ORDER BY root ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []Project
+	for rows.Next() {
+		var (
+			p  Project
+			at int64
+		)
+		if err := rows.Scan(&p.Root, &p.Token, &at); err != nil {
+			return nil, err
+		}
+		p.RegisteredAt = time.Unix(at, 0)
+		result = append(result, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // EventsBetween returns all events whose timestamp falls in [start, end),

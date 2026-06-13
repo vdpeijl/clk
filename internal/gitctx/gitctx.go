@@ -44,10 +44,34 @@ func Detect(dir string) Context {
 	return ctx
 }
 
+// Root returns the absolute path to the git repository root containing dir, or
+// an empty string when dir is not inside a repository.
+func Root(dir string) string {
+	if dir == "" {
+		return ""
+	}
+	return gitOutput(dir, "rev-parse", "--show-toplevel")
+}
+
 // IssueIDFromBranch extracts a PROJ-123-style issue id from a branch name,
 // returning an empty string when none is present. It is pure.
 func IssueIDFromBranch(branch string) string {
 	return issueIDRe.FindString(branch)
+}
+
+// Commit is the subset of a git commit captured as an event.
+type Commit struct {
+	SHA     string
+	Subject string
+}
+
+// LastCommit returns the most recent commit in the repository containing dir.
+// Both fields are empty when dir is not a repository or has no commits yet.
+func LastCommit(dir string) Commit {
+	return Commit{
+		SHA:     gitOutput(dir, "rev-parse", "HEAD"),
+		Subject: gitOutput(dir, "log", "-1", "--pretty=%s"),
+	}
 }
 
 // gitOutput runs git in dir and returns trimmed stdout, or "" on any failure.

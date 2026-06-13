@@ -46,6 +46,9 @@ type Daemon struct {
 	MergeInterval time.Duration
 	// MaterializeWindow is how far back reconstruction reaches on each pass.
 	MaterializeWindow time.Duration
+	// HeartbeatInterval is the minimum spacing between file-watch heartbeats for
+	// a single project.
+	HeartbeatInterval time.Duration
 
 	mu          sync.Mutex
 	buffer      []sessions.Event
@@ -65,6 +68,7 @@ func New(socketPath, dbPath, logPath, pidPath string) *Daemon {
 		FlushInterval:     defaultFlushInterval,
 		MergeInterval:     defaultMergeInterval,
 		MaterializeWindow: defaultMaterializeWindow,
+		HeartbeatInterval: defaultHeartbeatInterval,
 	}
 }
 
@@ -115,6 +119,12 @@ func (d *Daemon) run(ctx context.Context) error {
 	d.startedAt = time.Now()
 	d.logger.Printf("daemon started (pid %d), listening on %s", os.Getpid(), d.socketPath)
 
+	// File-watch heartbeats keep editor-only sessions alive for every project
+	// registered with `clk init`.
+	if w := d.startFileWatch(st); w != nil {
+		defer w.Close()
+	}
+
 	// Accept connections in the background; the worker loop owns all store I/O.
 	go d.acceptLoop(ln)
 
@@ -138,6 +148,39 @@ func (d *Daemon) run(ctx context.Context) error {
 			return nil
 		}
 	}
+}
+
+// startFileWatch launches heartbeat capture for every registered project. It
+// returns nil (and the daemon runs without file-watching) when there are no
+// registered projects or the OS watcher cannot be created — capture from hooks
+// is unaffected either way.
+func (d *Daemon) startFileWatch(st *store.Store) *fileWatcher {
+	projects, err := st.Projects()
+	if err != nil {
+		d.logger.Printf("filewatch: load projects: %v", err)
+		return nil
+	}
+	if len(projects) == 0 {
+		return nil
+	}
+
+	wp := make([]watchProject, 0, len(projects))
+	for _, p := range projects {
+		wp = append(wp, watchProject{root: p.Root, token: p.Token})
+	}
+
+	interval := d.HeartbeatInterval
+	if interval <= 0 {
+		interval = defaultHeartbeatInterval
+	}
+	w, err := newFileWatcher(wp, interval, d.enqueue, d.logger)
+	if err != nil {
+		d.logger.Printf("filewatch: %v", err)
+		return nil
+	}
+	go w.run()
+	d.logger.Printf("filewatch: watching %d project(s)", len(wp))
+	return w
 }
 
 // alreadyRunning reports whether a healthy daemon is already answering on the

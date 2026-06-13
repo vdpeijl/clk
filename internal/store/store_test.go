@@ -115,6 +115,48 @@ func TestReplaceAndQuerySessions(t *testing.T) {
 	}
 }
 
+func TestRegisterAndListProjects(t *testing.T) {
+	s := openTemp(t)
+
+	at := time.Date(2026, 6, 13, 9, 0, 0, 0, time.UTC)
+	if err := s.RegisterProject("/home/dev/clk", "clk", at); err != nil {
+		t.Fatalf("RegisterProject: %v", err)
+	}
+	if err := s.RegisterProject("/home/dev/other", "other", at); err != nil {
+		t.Fatalf("RegisterProject: %v", err)
+	}
+
+	got, err := s.Projects()
+	if err != nil {
+		t.Fatalf("Projects: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d projects, want 2", len(got))
+	}
+	if got[0].Root != "/home/dev/clk" || got[0].Token != "clk" {
+		t.Errorf("first project = %+v", got[0])
+	}
+	if !got[0].RegisteredAt.Equal(at) {
+		t.Errorf("registered_at = %v, want %v", got[0].RegisteredAt, at)
+	}
+
+	// Re-registering the same root updates rather than duplicates.
+	later := at.Add(time.Hour)
+	if err := s.RegisterProject("/home/dev/clk", "clk-renamed", later); err != nil {
+		t.Fatalf("RegisterProject (update): %v", err)
+	}
+	got, err = s.Projects()
+	if err != nil {
+		t.Fatalf("Projects: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("after re-register got %d projects, want 2", len(got))
+	}
+	if got[0].Token != "clk-renamed" {
+		t.Errorf("token not updated: %+v", got[0])
+	}
+}
+
 func TestSessionsBetweenRangeFiltering(t *testing.T) {
 	s := openTemp(t)
 
