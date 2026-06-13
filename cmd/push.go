@@ -381,7 +381,15 @@ func (p *pusher) entryFor(s sessions.Session) (clockify.NewTimeEntry, bool, erro
 	if !ok || mapping.Project == "" {
 		return clockify.NewTimeEntry{}, false, nil
 	}
+	return p.entryWith(s, mapping), true, nil
+}
 
+// entryWith renders a session into a Clockify payload against an explicit
+// mapping, applying rounding and the description template. It is the shared
+// core behind both the token-resolved push path and the review UI, where the
+// user may reassign a session to a project/task that differs from its token's
+// committed mapping.
+func (p *pusher) entryWith(s sessions.Session, mapping config.Mapping) clockify.NewTimeEntry {
 	dur := rounding.Round(s.Duration(), p.mode)
 	if dur <= 0 {
 		dur = sessions.MinDuration
@@ -393,7 +401,7 @@ func (p *pusher) entryFor(s sessions.Session) (clockify.NewTimeEntry, bool, erro
 		ProjectID:   mapping.Project,
 		TaskID:      mapping.Task,
 		Billable:    p.billable,
-	}, true, nil
+	}
 }
 
 // contentHash is a stable digest of the fields that determine a Clockify entry,
