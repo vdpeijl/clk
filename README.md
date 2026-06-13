@@ -56,6 +56,13 @@ go test ./...          # run tests
 
 Requires Go 1.21+. No CGO — the binary is fully static.
 
+## Releasing
+
+Releases are built by [GoReleaser](https://goreleaser.com) and published on tag
+push: cross-compiled binaries on GitHub Releases, a Homebrew formula in
+`vdpeijl/homebrew-tap`, and the `install.sh` / `clk upgrade` channels. See
+[RELEASING.md](RELEASING.md) for the full process.
+
 ## License
 
 MIT
